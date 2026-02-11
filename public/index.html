@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>NFT Mint Pro</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#020617" />
+    <meta name="description" content="Professional NFT minting & automation toolkit." />
+
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="manifest" href="/manifest.json" />
+  </head>
+
+  <body class="bg-slate-950 text-slate-50">
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+
+    <div id="root"></div>
+
+    <!-- 🔧 Polyfills so Node-style libs don't crash in Electron renderer -->
+    <script>
+      // Make `global` & `process.env.NODE_ENV` available before bundle loads
+      window.global = window;
+      window.process = window.process || {};
+      window.process.env = window.process.env || {};
+      window.process.env.NODE_ENV = window.process.env.NODE_ENV || 'development';
+    </script>
+    <!-- Webpack dev server apne bundle scripts khud inject karega -->
+  </body>
+</html>
