@@ -110,34 +110,9 @@ const WalletGroupManager = () => {
       {/* Groups list */}
       <div className="flex-1 overflow-y-auto">
         {/* All Wallets */}
-        <GroupItem
-          group={{
-            id: null,
-            name: 'All Wallets',
-            color: '#6B7280',
-            icon: 'folder',
-            isDefault: true
-          }}
-          count={stats.total}
-          selected={selectedGroup === null}
-          onClick={() => setSelectedGroup(null)}
-        />
+
 
         {/* Ungrouped */}
-        {ungroupedCount > 0 && (
-          <GroupItem
-            group={{
-              id: 'ungrouped',
-              name: 'Ungrouped',
-              color: '#9CA3AF',
-              icon: 'folder',
-              isDefault: true
-            }}
-            count={ungroupedCount}
-            selected={selectedGroup === 'ungrouped'}
-            onClick={() => setSelectedGroup('ungrouped')}
-          />
-        )}
 
         {/* Custom groups */}
         {groups.map(group => (

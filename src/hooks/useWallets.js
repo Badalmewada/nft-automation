@@ -40,30 +40,47 @@ const useWallets = () => {
 
   // Create a new wallet
   const createWallet = useCallback(async (options = {}) => {
-    try {
-      const wallet = await window.electron.invoke('wallet:create', options);
-      store.addWallet(wallet);
-      return wallet;
-    } catch (error) {
-      store.setError(error.message);
-      throw error;
-    }
-  }, []);
+  try {
+    const groupId = store.selectedGroup;
+
+    const wallet = await window.electron.invoke('wallet:create', {
+      ...options,
+      groupId: groupId === "ungrouped" ? null : groupId
+    });
+
+    store.addWallet(wallet);
+    return wallet;
+  } catch (error) {
+    store.setError(error.message);
+    throw error;
+  }
+}, []);
+
 
   // Create multiple wallets
-  const createBulkWallets = useCallback(async (count, options = {}) => {
-    store.setLoading(true);
-    try {
-      const wallets = await window.electron.invoke('wallet:createBulk', { count, options });
-      store.addWallets(wallets);
-      return wallets;
-    } catch (error) {
-      store.setError(error.message);
-      throw error;
-    } finally {
-      store.setLoading(false);
-    }
-  }, []);
+ const createBulkWallets = useCallback(async (count, options = {}) => {
+  store.setLoading(true);
+  try {
+    const groupId = store.selectedGroup;
+
+    const wallets = await window.electron.invoke('wallet:createBulk', {
+      count,
+      options: {
+        ...options,
+        groupId: groupId === "ungrouped" ? null : groupId
+      }
+    });
+
+    store.addWallets(wallets);
+    return wallets;
+  } catch (error) {
+    store.setError(error.message);
+    throw error;
+  } finally {
+    store.setLoading(false);
+  }
+}, []);
+
 
   // Import wallet from private key
   const importFromPrivateKey = useCallback(async (privateKey, options = {}) => {
@@ -195,11 +212,11 @@ const useWallets = () => {
 
   // Update group
   const updateGroup = useCallback(async (groupId, updates) => {
-    try {
-      const updated = await window.electron.invoke('wallet:updateGroup', { 
-        groupId, 
-        updates 
-      });
+  try {
+    const updated = await window.electron.invoke('wallet:updateGroup', { 
+      id: groupId,
+      ...updates
+    });
       store.updateGroup(groupId, updated);
       return updated;
     } catch (error) {
@@ -269,7 +286,7 @@ const useWallets = () => {
     stats: store.stats,
 
     // Getters
-    filteredWallets: store.getFilteredWallets(),
+    filteredWallets: store.getFilteredWallets,
     selectedWalletObjects: store.getSelectedWalletObjects(),
     allTags: store.getAllTags(),
 

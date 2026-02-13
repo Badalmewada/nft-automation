@@ -1,0 +1,49 @@
+{
+  "wallets": [],
+  "walletGroups": [
+    {
+      "id": "799a543d-bbbf-47dd-8ad7-9e54df518e44",
+      "name": "a",
+      "description": "",
+      "color": "#3B82F6",
+      "createdAt": 1770965493104
+    },
+    {
+      "id": "d97a9307-667b-4362-8dbb-b8f4eeb94b1a",
+      "name": "s",
+      "description": "s",
+      "color": "#10B981",
+      "createdAt": 1770965513617
+    },
+    {
+      "id": "4d811942-96d7-4e46-9a0a-3a951ff819b7",
+      "name": "g",
+      "description": "g",
+      "color": "#8B5CF6",
+      "createdAt": 1770967286701
+    },
+    {
+      "id": "1e32fe1c-b851-4ccd-ad86-4c6c2eaf5f0d",
+      "name": "1",
+      "description": "1",
+      "color": "#3B82F6",
+      "createdAt": 1770968047857
+    },
+    {
+      "id": "ce577f4b-844a-4f28-95ea-66d5076af87f",
+      "name": "uu",
+      "description": "uu",
+      "color": "#8B5CF6",
+      "createdAt": 1770968054522,
+      "icon": "folder",
+      "updatedAt": 1770968485570
+    },
+    {
+      "id": "bbca1c5e-a6a3-47b0-8ca5-4e0acc5ba82d",
+      "name": "3",
+      "description": "",
+      "color": "#14B8A6",
+      "createdAt": 1770968078438
+    }
+  ]
+}

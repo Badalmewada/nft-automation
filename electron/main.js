@@ -3,8 +3,10 @@ require('dotenv').config();
 const path = require('path');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const logger = require('./utils/logger');
-const getDb = require('./db/database');
+const db = require('./db/database');
 const { registerIpcHandlers } = require('./ipc/handlers');
+const taskService = require("./services/task-service");
+
 
 // Keep a global reference to prevent GC
 let mainWindow;
@@ -55,7 +57,6 @@ async function initialize() {
   try {
     logger.info('App initializing...');
     // Initialize DB (lazy but we can warm it here)
-    getDb();
 
     // Register IPC handlers
     registerIpcHandlers();

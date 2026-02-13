@@ -1,38 +1,48 @@
-// electron/services/wallet-service.js
+//C:\Users\Lenovo\Desktop\Highers\nft-mint-pro\electron\services\wallet-service.js
 const walletManager = require('../blockchain/wallet');
 const encryption = require('../security/encryption');
 const database = require('../db/database');
 const logger = require('../utils/logger');
 const { v4: uuidv4 } = require('uuid');
 
+let walletCounter = 1;
+
 class WalletService {
   constructor() {
     this.cache = new Map();
   }
 
-  /**
-   * Create a new wallet
-   * @param {Object} options - Wallet creation options
-   * @returns {Promise<Object>} Created wallet
-   */
+  /* --------------------------- helpers --------------------------- */
+
+  nextName(prefix = "Wallet") {
+    return `${prefix} ${walletCounter++}`;
+  }
+
+  sanitizeWallet(wallet) {
+    const { encryptedPrivateKey, encryptedMnemonic, ...safe } = wallet;
+    return {
+      ...safe,
+      hasPrivateKey: !!encryptedPrivateKey,
+      hasMnemonic: !!encryptedMnemonic
+    };
+  }
+
+  /* --------------------------- create --------------------------- */
+
   async createWallet(options = {}) {
     try {
       const walletData = walletManager.generateWallet();
       const walletId = uuidv4();
-
-      // Encrypt private key
-      const encryptedPrivateKey = encryption.encrypt(walletData.privateKey);
-      const encryptedMnemonic = walletData.mnemonic 
-        ? encryption.encrypt(walletData.mnemonic)
-        : null;
-
+      // groupId: options.groupId || null
       const wallet = {
         id: walletId,
-        name: options.name || walletManager.generateWalletName(),
+        name: options.name || this.nextName(),
         address: walletData.address,
-        encryptedPrivateKey,
-        encryptedMnemonic,
-        groupId: options.groupId || null,
+        encryptedPrivateKey: encryption.encrypt(walletData.privateKey),
+        encryptedMnemonic: walletData.mnemonic
+          ? encryption.encrypt(walletData.mnemonic)
+          : null,
+        groupId: options.groupId ?? null,
         tags: options.tags || [],
         metadata: {
           createdAt: Date.now(),
@@ -43,47 +53,39 @@ class WalletService {
       };
 
       await database.wallets.create(wallet);
-      logger.info(`Wallet created: ${wallet.address}`);
 
-      // Cache decrypted key temporarily (cleared on app close)
       this.cache.set(walletId, walletData.privateKey);
 
+      logger.info(`Wallet created ${wallet.address}`);
       return this.sanitizeWallet(wallet);
-    } catch (error) {
-      logger.error('Failed to create wallet:', error);
-      throw error;
+
+    } catch (err) {
+      logger.error("Create wallet failed", err);
+      throw err;
     }
   }
 
-  /**
-   * Create multiple wallets in bulk
-   * @param {number} count - Number of wallets to create
-   * @param {Object} options - Wallet options
-   * @returns {Promise<Array>} Created wallets
-   */
+  /* --------------------------- bulk create --------------------------- */
+
   async createBulkWallets(count, options = {}) {
     try {
-      const wallets = [];
-      const walletDataArray = walletManager.generateBulkWallets(count);
+      const amount = Number(count) || 1;
+      const walletDataArray = walletManager.generateBulkWallets(amount);
 
-      for (let i = 0; i < walletDataArray.length; i++) {
-        const walletData = walletDataArray[i];
-        const walletId = uuidv4();
+      const wallets = walletDataArray.map((walletData, i) => {
+        const id = uuidv4();
 
-        const encryptedPrivateKey = encryption.encrypt(walletData.privateKey);
-        const encryptedMnemonic = walletData.mnemonic
-          ? encryption.encrypt(walletData.mnemonic)
-          : null;
-
-        const wallet = {
-          id: walletId,
-          name: options.namePrefix 
+        const record = {
+          id,
+          name: options.namePrefix
             ? `${options.namePrefix} ${i + 1}`
-            : walletManager.generateWalletName(),
+            : this.nextName(),
           address: walletData.address,
-          encryptedPrivateKey,
-          encryptedMnemonic,
-          groupId: options.groupId || null,
+          encryptedPrivateKey: encryption.encrypt(walletData.privateKey),
+          encryptedMnemonic: walletData.mnemonic
+            ? encryption.encrypt(walletData.mnemonic)
+            : null,
+          groupId: options.groupId ?? null,
           tags: options.tags || [],
           metadata: {
             createdAt: Date.now(),
@@ -93,396 +95,225 @@ class WalletService {
           }
         };
 
-        wallets.push(wallet);
-        this.cache.set(walletId, walletData.privateKey);
-      }
+        this.cache.set(id, walletData.privateKey);
+        return record;
+      });
 
       await database.wallets.createMany(wallets);
-      logger.info(`Bulk created ${count} wallets`);
+
+      logger.info(`Bulk created ${wallets.length} wallets`);
 
       return wallets.map(w => this.sanitizeWallet(w));
-    } catch (error) {
-      logger.error('Failed to create bulk wallets:', error);
-      throw error;
+
+    } catch (err) {
+      logger.error("Bulk create failed", err);
+      throw err;
     }
   }
 
-  /**
-   * Import wallet from private key
-   * @param {string} privateKey - Private key
-   * @param {Object} options - Import options
-   * @returns {Promise<Object>} Imported wallet
-   */
+  /* --------------------------- imports --------------------------- */
+
   async importFromPrivateKey(privateKey, options = {}) {
     try {
       const walletData = walletManager.importFromPrivateKey(privateKey);
-      
-      // Check if wallet already exists
-      const existing = await database.wallets.findByAddress(walletData.address);
-      if (existing) {
-        throw new Error('Wallet already exists');
-      }
 
-      const walletId = uuidv4();
-      const encryptedPrivateKey = encryption.encrypt(walletData.privateKey);
+      const existing = await database.wallets.findByAddress(walletData.address);
+      if (existing) throw new Error("Wallet already exists");
+
+      const id = uuidv4();
 
       const wallet = {
-        id: walletId,
-        name: options.name || walletManager.generateWalletName(),
+        id,
+        name: options.name || this.nextName(),
         address: walletData.address,
-        encryptedPrivateKey,
+        encryptedPrivateKey: encryption.encrypt(walletData.privateKey),
         encryptedMnemonic: null,
         groupId: options.groupId || null,
         tags: options.tags || [],
         metadata: {
           createdAt: Date.now(),
           importedAt: Date.now(),
-          importMethod: 'privateKey',
+          importMethod: "privateKey",
           lastUsed: null,
           transactionCount: 0
         }
       };
 
       await database.wallets.create(wallet);
-      logger.info(`Wallet imported: ${wallet.address}`);
+      this.cache.set(id, walletData.privateKey);
 
-      this.cache.set(walletId, walletData.privateKey);
       return this.sanitizeWallet(wallet);
-    } catch (error) {
-      logger.error('Failed to import wallet:', error);
-      throw error;
+
+    } catch (err) {
+      logger.error("Import private key failed", err);
+      throw err;
     }
   }
 
-  /**
-   * Import wallet from mnemonic
-   * @param {string} mnemonic - Seed phrase
-   * @param {Object} options - Import options
-   * @returns {Promise<Object>} Imported wallet
-   */
-  async importFromMnemonic(mnemonic, options = {}) {
-    try {
-      const walletData = walletManager.importFromMnemonic(
-        mnemonic,
-        options.path,
-        options.index || 0
-      );
-
-      const existing = await database.wallets.findByAddress(walletData.address);
-      if (existing) {
-        throw new Error('Wallet already exists');
-      }
-
-      const walletId = uuidv4();
-      const encryptedPrivateKey = encryption.encrypt(walletData.privateKey);
-      const encryptedMnemonic = encryption.encrypt(walletData.mnemonic);
-
-      const wallet = {
-        id: walletId,
-        name: options.name || walletManager.generateWalletName(),
-        address: walletData.address,
-        encryptedPrivateKey,
-        encryptedMnemonic,
-        derivationPath: walletData.path,
-        groupId: options.groupId || null,
-        tags: options.tags || [],
-        metadata: {
-          createdAt: Date.now(),
-          importedAt: Date.now(),
-          importMethod: 'mnemonic',
-          lastUsed: null,
-          transactionCount: 0
-        }
-      };
-
-      await database.wallets.create(wallet);
-      logger.info(`Wallet imported from mnemonic: ${wallet.address}`);
-
-      this.cache.set(walletId, walletData.privateKey);
-      return this.sanitizeWallet(wallet);
-    } catch (error) {
-      logger.error('Failed to import from mnemonic:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Import multiple wallets from mnemonic
-   * @param {string} mnemonic - Seed phrase
-   * @param {number} count - Number of wallets to derive
-   * @param {Object} options - Import options
-   * @returns {Promise<Array>} Imported wallets
-   */
   async importMultipleFromMnemonic(mnemonic, count, options = {}) {
     try {
-      const startIndex = options.startIndex || 0;
-      const walletDataArray = walletManager.deriveMultipleFromMnemonic(
+      const start = options.startIndex || 0;
+
+      const derived = walletManager.deriveMultipleFromMnemonic(
         mnemonic,
         count,
-        startIndex
+        start
       );
 
-      const wallets = [];
       const encryptedMnemonic = encryption.encrypt(mnemonic);
 
-      for (let i = 0; i < walletDataArray.length; i++) {
-        const walletData = walletDataArray[i];
-        
-        // Skip if already exists
-        const existing = await database.wallets.findByAddress(walletData.address);
-        if (existing) continue;
+      const wallets = [];
 
-        const walletId = uuidv4();
-        const encryptedPrivateKey = encryption.encrypt(walletData.privateKey);
+      for (let i = 0; i < derived.length; i++) {
+        const data = derived[i];
 
-        const wallet = {
-          id: walletId,
+        const exists = await database.wallets.findByAddress(data.address);
+        if (exists) continue;
+
+        const id = uuidv4();
+
+        const record = {
+          id,
           name: options.namePrefix
-            ? `${options.namePrefix} ${startIndex + i + 1}`
-            : walletManager.generateWalletName(),
-          address: walletData.address,
-          encryptedPrivateKey,
+            ? `${options.namePrefix} ${start + i + 1}`
+            : this.nextName(),
+          address: data.address,
+          encryptedPrivateKey: encryption.encrypt(data.privateKey),
           encryptedMnemonic,
-          derivationPath: walletData.path,
+          derivationPath: data.path,
           groupId: options.groupId || null,
           tags: options.tags || [],
           metadata: {
             createdAt: Date.now(),
             importedAt: Date.now(),
-            importMethod: 'mnemonic',
-            accountIndex: startIndex + i,
+            importMethod: "mnemonic",
+            accountIndex: start + i,
             lastUsed: null,
             transactionCount: 0
           }
         };
 
-        wallets.push(wallet);
-        this.cache.set(walletId, walletData.privateKey);
+        wallets.push(record);
+        this.cache.set(id, data.privateKey);
       }
 
-      if (wallets.length > 0) {
+      if (wallets.length) {
         await database.wallets.createMany(wallets);
-        logger.info(`Imported ${wallets.length} wallets from mnemonic`);
       }
 
       return wallets.map(w => this.sanitizeWallet(w));
-    } catch (error) {
-      logger.error('Failed to import multiple from mnemonic:', error);
-      throw error;
+
+    } catch (err) {
+      logger.error("Mnemonic import failed", err);
+      throw err;
     }
   }
 
-  /**
-   * Import wallet from JSON keystore
-   * @param {string} json - JSON keystore
-   * @param {string} password - Keystore password
-   * @param {Object} options - Import options
-   * @returns {Promise<Object>} Imported wallet
-   */
-  async importFromJSON(json, password, options = {}) {
-    try {
-      const walletData = await walletManager.importFromJSON(json, password);
+  /* --------------------------- read --------------------------- */
 
-      const existing = await database.wallets.findByAddress(walletData.address);
-      if (existing) {
-        throw new Error('Wallet already exists');
-      }
-
-      const walletId = uuidv4();
-      const encryptedPrivateKey = encryption.encrypt(walletData.privateKey);
-
-      const wallet = {
-        id: walletId,
-        name: options.name || walletManager.generateWalletName(),
-        address: walletData.address,
-        encryptedPrivateKey,
-        encryptedMnemonic: null,
-        groupId: options.groupId || null,
-        tags: options.tags || [],
-        metadata: {
-          createdAt: Date.now(),
-          importedAt: Date.now(),
-          importMethod: 'json',
-          lastUsed: null,
-          transactionCount: 0
-        }
-      };
-
-      await database.wallets.create(wallet);
-      logger.info(`Wallet imported from JSON: ${wallet.address}`);
-
-      this.cache.set(walletId, walletData.privateKey);
-      return this.sanitizeWallet(wallet);
-    } catch (error) {
-      logger.error('Failed to import from JSON:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get wallet by ID
-   * @param {string} walletId - Wallet ID
-   * @returns {Promise<Object>} Wallet
-   */
-  async getWallet(walletId) {
-    const wallet = await database.wallets.findById(walletId);
+  async getWallet(id) {
+    const wallet = await database.wallets.findById(id);
     return wallet ? this.sanitizeWallet(wallet) : null;
   }
 
-  /**
-   * Get all wallets
-   * @param {Object} filters - Filter options
-   * @returns {Promise<Array>} Wallets
-   */
   async getAllWallets(filters = {}) {
-    const wallets = await database.wallets.findAll(filters);
-    return wallets.map(w => this.sanitizeWallet(w));
+    const list = await database.wallets.findAll(filters);
+    return list.map(w => this.sanitizeWallet(w));
   }
 
-  /**
-   * Get wallets by group
-   * @param {string} groupId - Group ID
-   * @returns {Promise<Array>} Wallets
-   */
   async getWalletsByGroup(groupId) {
-    const wallets = await database.wallets.findByGroup(groupId);
-    return wallets.map(w => this.sanitizeWallet(w));
+    const list = await database.wallets.findByGroup(groupId);
+    return list.map(w => this.sanitizeWallet(w));
   }
 
-  /**
-   * Update wallet
-   * @param {string} walletId - Wallet ID
-   * @param {Object} updates - Update data
-   * @returns {Promise<Object>} Updated wallet
-   */
-  async updateWallet(walletId, updates) {
-    try {
-      const allowedUpdates = ['name', 'groupId', 'tags', 'metadata'];
-      const filteredUpdates = {};
+  /* --------------------------- update --------------------------- */
 
-      for (const key of allowedUpdates) {
-        if (updates.hasOwnProperty(key)) {
-          filteredUpdates[key] = updates[key];
+  async updateWallet(id, updates) {
+    try {
+      const allowed = ["name", "groupId", "tags", "metadata"];
+      const safe = {};
+
+      for (const key of allowed) {
+        if (updates[key] !== undefined) {
+          safe[key] = updates[key];
         }
       }
 
-      await database.wallets.update(walletId, filteredUpdates);
-      logger.info(`Wallet updated: ${walletId}`);
+      await database.wallets.update(id, safe);
+      return this.getWallet(id);
 
-      return await this.getWallet(walletId);
-    } catch (error) {
-      logger.error('Failed to update wallet:', error);
-      throw error;
+    } catch (err) {
+      logger.error("Update wallet failed", err);
+      throw err;
     }
   }
 
-  /**
-   * Delete wallet
-   * @param {string} walletId - Wallet ID
-   * @returns {Promise<boolean>} Success
-   */
-  async deleteWallet(walletId) {
+  /* --------------------------- delete --------------------------- */
+
+  async deleteWallet(id) {
     try {
-      await database.wallets.delete(walletId);
-      this.cache.delete(walletId);
-      logger.info(`Wallet deleted: ${walletId}`);
+      await database.wallets.delete(id);
+      this.cache.delete(id);
       return true;
-    } catch (error) {
-      logger.error('Failed to delete wallet:', error);
-      throw error;
+    } catch (err) {
+      logger.error("Delete wallet failed", err);
+      throw err;
     }
   }
 
-  /**
-   * Delete multiple wallets
-   * @param {Array<string>} walletIds - Wallet IDs
-   * @returns {Promise<number>} Number of deleted wallets
-   */
   async deleteWallets(walletIds) {
     try {
-      const count = await database.wallets.deleteMany(walletIds);
-      walletIds.forEach(id => this.cache.delete(id));
-      logger.info(`Deleted ${count} wallets`);
+      const ids = Array.isArray(walletIds) ? walletIds : [];
+
+      if (!ids.length) return 0;
+
+      const count = await database.wallets.deleteMany(ids);
+
+      ids.forEach(id => this.cache.delete(id));
+
       return count;
-    } catch (error) {
-      logger.error('Failed to delete wallets:', error);
-      throw error;
+
+    } catch (err) {
+      logger.error("Delete many wallets failed", err);
+      throw err;
     }
   }
 
-  /**
-   * Get decrypted private key (for signing)
-   * @param {string} walletId - Wallet ID
-   * @returns {Promise<string>} Private key
-   */
-  async getPrivateKey(walletId) {
-    // Check cache first
-    if (this.cache.has(walletId)) {
-      return this.cache.get(walletId);
-    }
+  /* --------------------------- crypto access --------------------------- */
 
-    const wallet = await database.wallets.findById(walletId);
-    if (!wallet) {
-      throw new Error('Wallet not found');
-    }
+  async getPrivateKey(id) {
+    if (this.cache.has(id)) return this.cache.get(id);
 
-    const privateKey = encryption.decrypt(wallet.encryptedPrivateKey);
-    this.cache.set(walletId, privateKey);
-    return privateKey;
+    const wallet = await database.wallets.findById(id);
+    if (!wallet) throw new Error("Wallet not found");
+
+    const pk = encryption.decrypt(wallet.encryptedPrivateKey);
+    this.cache.set(id, pk);
+
+    return pk;
   }
 
-  /**
-   * Export wallet to encrypted backup
-   * @param {string} walletId - Wallet ID
-   * @param {string} password - Export password
-   * @returns {Promise<string>} Encrypted backup
-   */
-  async exportWallet(walletId, password) {
-    try {
-      const wallet = await database.wallets.findById(walletId);
-      if (!wallet) {
-        throw new Error('Wallet not found');
-      }
+  /* --------------------------- export --------------------------- */
 
-      const privateKey = encryption.decrypt(wallet.encryptedPrivateKey);
-      const exportData = {
-        address: wallet.address,
-        privateKey,
-        name: wallet.name,
-        tags: wallet.tags,
-        exportedAt: Date.now()
-      };
+  async exportWallet(id, password) {
+    const wallet = await database.wallets.findById(id);
+    if (!wallet) throw new Error("Wallet not found");
 
-      if (wallet.encryptedMnemonic) {
-        exportData.mnemonic = encryption.decrypt(wallet.encryptedMnemonic);
-        exportData.derivationPath = wallet.derivationPath;
-      }
+    const pk = encryption.decrypt(wallet.encryptedPrivateKey);
 
-      const json = JSON.stringify(exportData);
-      return await encryption.encryptWithPassword(json, password);
-    } catch (error) {
-      logger.error('Failed to export wallet:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Remove sensitive data from wallet object
-   * @param {Object} wallet - Wallet object
-   * @returns {Object} Sanitized wallet
-   */
-  sanitizeWallet(wallet) {
-    const { encryptedPrivateKey, encryptedMnemonic, ...safe } = wallet;
-    return {
-      ...safe,
-      hasPrivateKey: !!encryptedPrivateKey,
-      hasMnemonic: !!encryptedMnemonic
+    const payload = {
+      address: wallet.address,
+      privateKey: pk,
+      name: wallet.name,
+      tags: wallet.tags,
+      exportedAt: Date.now()
     };
+
+    return encryption.encrypt(JSON.stringify(payload), password);
   }
 
-  /**
-   * Clear cache
-   */
+  /* --------------------------- memory --------------------------- */
+
   clearCache() {
     this.cache.clear();
   }

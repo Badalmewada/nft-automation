@@ -31,6 +31,6 @@ function TaskLogs({
     }
   };
 
-
+}
 
 export default TaskLogs;

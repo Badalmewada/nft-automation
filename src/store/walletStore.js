@@ -142,53 +142,17 @@ const useWalletStore = create((set, get) => ({
 
   // Filtered wallets
   getFilteredWallets: () => {
-    const { wallets, searchQuery, selectedGroup, filterTags, sortBy, sortOrder } = get();
-    
-    let filtered = [...wallets];
+  const { wallets, selectedGroup } = get();
 
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(w => 
-        w.name.toLowerCase().includes(query) ||
-        w.address.toLowerCase().includes(query) ||
-        w.tags?.some(tag => tag.toLowerCase().includes(query))
-      );
-    }
+  // If no group selected → show all wallets
+  if (!selectedGroup) return wallets;
 
-    // Filter by group
-    if (selectedGroup) {
-      filtered = filtered.filter(w => w.groupId === selectedGroup);
-    }
+  // Otherwise show only wallets belonging to selected group
+  return wallets.filter(
+    (w) => String(w.groupId) === String(selectedGroup)
+  );
+},
 
-    // Filter by tags
-    if (filterTags.length > 0) {
-      filtered = filtered.filter(w => 
-        filterTags.every(tag => w.tags?.includes(tag))
-      );
-    }
-
-    // Sort
-    filtered.sort((a, b) => {
-      let aVal = a[sortBy];
-      let bVal = b[sortBy];
-
-      if (sortBy === 'createdAt' || sortBy === 'lastUsed') {
-        aVal = aVal || 0;
-        bVal = bVal || 0;
-      }
-
-      if (typeof aVal === 'string') {
-        return sortOrder === 'asc' 
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal);
-      }
-
-      return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-    });
-
-    return filtered;
-  },
 
   // Get wallets by group
   getWalletsByGroup: (groupId) => {
@@ -204,22 +168,27 @@ const useWalletStore = create((set, get) => ({
 
   // Update stats
   updateStats: () => {
-    const { wallets } = get();
-    
-    const stats = {
+  const wallets = get().wallets;
+  const byGroup = {};
+
+  wallets.forEach(wallet => {
+    const gid = wallet.groupId ?? null;
+
+    if (!gid) {
+      byGroup["ungrouped"] = (byGroup["ungrouped"] || 0) + 1;
+    } else {
+      byGroup[gid] = (byGroup[gid] || 0) + 1;
+    }
+  });
+
+  set({
+    stats: {
       total: wallets.length,
-      byGroup: {},
-      byChain: {}
-    };
-
-    wallets.forEach(wallet => {
-      // Count by group
-      const groupId = wallet.groupId || 'ungrouped';
-      stats.byGroup[groupId] = (stats.byGroup[groupId] || 0) + 1;
-    });
-
-    set({ stats });
-  },
+      byGroup
+    }
+  });
+}
+,
 
   // Get all unique tags
   getAllTags: () => {

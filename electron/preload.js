@@ -19,15 +19,27 @@ const ipcApi = {
   removeListener: (channel, listener) => {
     ipcRenderer.removeListener(channel, listener);
   },
+
+  walletGroups: {
+  create: (data) =>
+    ipcRenderer.invoke("walletGroup:create", data),
+
+  list: () =>
+    ipcRenderer.invoke("walletGroup:list"),
+
+  delete: (id) =>
+    ipcRenderer.invoke("walletGroup:delete", id),
+},
+
 };
 
 // Expose to renderer
-contextBridge.exposeInMainWorld('electron', {
-  // 🔹 legacy style – jaisa tumhara frontend expect kar raha hai:
+contextBridge.exposeInMainWorld("api", ipcApi);
+
+contextBridge.exposeInMainWorld("electron", {
   invoke: ipcApi.invoke,
   on: ipcApi.on,
   removeListener: ipcApi.removeListener,
-
-  // 🔹 nice namespaced style (agar kahin useIPC hook `window.electron.ipc` expect kare):
   ipc: ipcApi,
 });
+
